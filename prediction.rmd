@@ -1,0 +1,83 @@
+---
+title: "Prediction Of Wieght Lifting Results"
+author: "Francois Laforgia"
+date: "24 Jan 2016"
+output: html_document
+---
+
+## Summary
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+In this project, data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants is used. The participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The aim of the project is to predict which way the exercise has been done basing on a machine learning algorithm.
+
+## Data Source
+The source of the data comes from  http://groupware.les.inf.puc-rio.br/har.  
+The data set is provided in 2 spurces, the training data set used to build the algorithm is available on https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv and the data set used to do the final prediction used for the project is on https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv.
+
+## Data Exploratory  
+
+### Data Loading
+After loading the data, the first was to split the training set in two parts, a training and a testing part. Doing that allows me to keep untouched the testing set for the project and to reduce the risk to have a bad prediction because of overfitting.  
+```{r echo=TRUE, warning=FALSE, cache=TRUE, message=FALSE} 
+library(dplyr)
+library(caret)
+library(randomForest)
+
+setwd("/Users/flaforgia/Documents/PML/Project")
+HAR.training <- read.csv("pml-training.csv", na.strings=c("NA", "#DIV/0!"))
+
+options(max.print=999999)
+set.seed(3233)
+
+train <- createDataPartition(y=HAR.training$classe, p=0.6, list=FALSE)
+training <- HAR.training[train,]
+testing <- HAR.training[-train,]
+```  
+
+### Data Cleaning
+
+I decided to remove all the variables that have a zero variance or that are close to variance of zero. These nzv variables will not have an impact on the model fitting because they have few, if none, variation and thus it is like adding a constant variable to the computation. Furthermore this could cause an overfitting of the predictors. To remove these predictora, I used the command nzv provided with the package caret.  
+After the nzv variables were removed I also removed the NA variables. Those variables can cause a bias in thre model. But to keep an uncertainity that could avoid again an overfitting, I only removed the predictors when the NA is above a threshold of 90% (10599 NA).  
+And finally I removed the seven first columns which are not specific to the data mesured.  
+
+At the end it appears that the predictores removed are the ones calculated like the standard deviation or the mean of the Euler's angles (cf. the pdf document available on http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf).
+```{r echo=TRUE, warning=FALSE, cache=TRUE, message=FALSE}
+training.nzv <- nzv(training)
+filtered.training <- training[,-training.nzv]
+training.set <- data.frame(apply(filtered.training,2,function(x){sum(is.na(x))}))
+training.set <- cbind(rownames(training.set) , training.set)
+colnames(training.set) <- c("sensor", "sum.NA")
+
+names.factor <- c()
+for (i in 1:nrow(training.set)) { 
+       if (training.set[i,2] <= 10599) {
+               names.factor <- c(names.factor, as.character(training.set[i,1]))
+        }
+}
+
+training.final <- filtered.training[,names.factor]
+training.final <- training.final[,-(1:7)]
+colnames(training.final)
+```
+
+### Model Fitting
+Before we run the train method, I executed a preprocessing step with Principal Component Analysis to confirm that the remaining predictors are or not correlated. I used a threshold of 99% to keep the best accuracy possible. Once the PCA was done, I created a new train variable that will be used for the train function.
+```{r echo=TRUE, warning=FALSE, cache=TRUE, message=FALSE}
+preprocess.HAR.pca <- preProcess(training.final[,-52], method="pca", thresh=0.99)
+train.HAR <- predict(preprocess.HAR.pca, training.final[,-52])
+preprocess.HAR.pca
+```
+The preprocessing step shows that only 36 predictors were used to reach 99% of accuracy.  
+Finally I fitted the model with a random forest which is the alogrithm that gives the better accuracy. I used the default options for this operation 
+```{r echo=TRUE, warning=FALSE, cache=TRUE, message=FALSE}
+fit.rf <- train(training.final$classe~., method="rf", data=train.HAR)
+```  
+
+### Model Verification
+To verify the accuracy, I use it against the test dataset built earlier and I display the confusionMatrix. Before I can predict from the test set I applied the pca modification as I did fro the training set.
+```{r echo=TRUE, warning=FALSE, cache=TRUE, message=FALSE}
+testing.rf <- predict(preprocess.HAR.pca, testing[,-160])
+testing.final <- predict(fit.rf, testing.rf)
+confusionMatrix(testing$classe, testing.final)
+```
+## Conclusion
+Based on the result from the confusionMatrix, the model has an accuracy around 98% which is good. I will use this model to predict the classes on the validation set provided.
