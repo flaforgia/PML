@@ -1,5 +1,5 @@
 ---
-title: "Prediction Of Wieght Lifting Results"
+title: "Prediction Of Weight Lifting Execution"
 author: "Francois Laforgia"
 date: "24 Jan 2016"
 output: html_document
@@ -60,24 +60,30 @@ colnames(training.final)
 ```
 
 ### Model Fitting
-Before we run the train method, I executed a preprocessing step with Principal Component Analysis to confirm that the remaining predictors are or not correlated. I used a threshold of 99% to keep the best accuracy possible. Once the PCA was done, I created a new train variable that will be used for the train function.
+For this step I used a random forest algorithm because this algorithm provides the best accuracy and it is easy to use aven if it can take long time tocompute.  
+Before we run the train method, to have the best accuracy, I decided to compare two models based both on a random forest algorithm. I fit first a model with a preprocessing step with Principal Component Analysis and second another random forest but this time on a training set without PCA.  
+For the PCA, I used a threshold of 99% to keep the best accuracy possible. Once the PCA was done, I created a new train variable that will be used for the train function.
 ```{r echo=TRUE, warning=FALSE, cache=TRUE, message=FALSE}
 preprocess.HAR.pca <- preProcess(training.final[,-52], method="pca", thresh=0.99)
 train.HAR <- predict(preprocess.HAR.pca, training.final[,-52])
 preprocess.HAR.pca
 ```
 The preprocessing step shows that only 36 predictors were used to reach 99% of accuracy.  
-Finally I fitted the model with a random forest which is the alogrithm that gives the better accuracy. I used the default options for this operation 
+Finally I fitted the models. I used the default options for this operation 
 ```{r echo=TRUE, warning=FALSE, cache=TRUE, message=FALSE}
-fit.rf <- train(training.final$classe~., method="rf", data=train.HAR)
+fit.rf.1 <- train(training.final$classe~., method="rf", data=train.HAR)
+fit.rf.2 <- train(training.final$classe~., method="rf", data=training.final)
 ```  
 
 ### Model Verification
-To verify the accuracy, I use it against the test dataset built earlier and I display the confusionMatrix. Before I can predict from the test set I applied the pca modification as I did fro the training set.
+To verify the accuracy, I use it against the test dataset built earlier and I display the confusionMatrix.  
+Before I can predict from the model with PCA, I applied the pca modification as I did for the training set. Finally I displayed the confusionMatrix for both models predictions.
 ```{r echo=TRUE, warning=FALSE, cache=TRUE, message=FALSE}
 testing.rf <- predict(preprocess.HAR.pca, testing[,-160])
-testing.final <- predict(fit.rf, testing.rf)
-confusionMatrix(testing$classe, testing.final)
+testing.final.1 <- predict(fit.rf.1, testing.rf)
+testing.final.2 <- predict(fit.rf.2, testing)
+confusionMatrix(testing$classe, testing.final.1)
+confusionMatrix(testing$classe, testing.final.2)
 ```
 ## Conclusion
-Based on the result from the confusionMatrix, the model has an accuracy around 98% which is good. I will use this model to predict the classes on the validation set provided.
+Based on the result from the confusionMatrix, the model that has the best accuracy is the one created without the PCA. This model has 99.24% of accuracy. The sensitivity is about 99.56% and the specificity is around 99.89%. This model is closed to the perfect classification as described in ROC (sensitivity = 1 and 1-specificity = 0) so I will use this model to predict the classes on the validation set provided.
